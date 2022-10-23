@@ -1,11 +1,12 @@
-#include "GameMain.h"
 #include <iostream>
 #include <format>
+#include "GameMain.h"
 
 GameMain::GameMain() {
 	window = new RenderWindow(VideoMode(1440, 800), "Apple-Game!");
 	gen = new std::mt19937(time(0));
 	uni = new std::uniform_int_distribution<int>(1, 9);
+	hack_coro = new Task(hack());
 
 	arr.assign(boardHeight, std::vector<int>(boardWidth));
 	texts.assign(boardHeight, std::vector<Text>(boardWidth,Text("0",font,40)));
@@ -28,44 +29,68 @@ GameMain::~GameMain() {
 	delete window;
 	delete gen;
 	delete uni;
-}
-
-void GameMain::showFinalScene() {
-	Event event;
-	Text finalText(L"게임 종료", font, 120);
-	Text infoText(L"다시 시작하려면 R", font, 80);
-	finalText.setPosition(500, 200);
-	infoText.setPosition(430, 400);
-	window->clear();
-	window->draw(finalText);
-	window->draw(infoText);
-	window->display();
-	while (true)
-	{
-		while (window->pollEvent(event))
-		{
-			if (event.type == Event::Closed)
-				window->close();
-		}
-		if (Keyboard::isKeyPressed(Keyboard::R)) {
-			reset();
-			break;
-		}
-	}
+	delete hack_coro;
 }
 
 DragRect GameMain::calcDragRect() {
 	return {
-	(std::min(dragStartPos.x, curPos.x) - whiteSpaceX + textSize * 2 / 3) / textSize,
-	(std::min(dragStartPos.y, curPos.y) - whiteSpaceY + textSize / 2) / textSize,
-	(std::max(dragStartPos.x, curPos.x) - whiteSpaceX - textSize / 4) / textSize,
-	(std::max(dragStartPos.y, curPos.y) - whiteSpaceY - textSize / 2) / textSize,
+		(std::min(dragStartPos.x, curPos.x) - whiteSpaceX + textSize * 2 / 3) / textSize,
+		(std::min(dragStartPos.y, curPos.y) - whiteSpaceY + textSize / 2) / textSize,
+		(std::max(dragStartPos.x, curPos.x) - whiteSpaceX - textSize / 4) / textSize,
+		(std::max(dragStartPos.y, curPos.y) - whiteSpaceY - textSize / 2) / textSize,
 	};
+}
+
+int GameMain::calcRectSum(DragRect range) {
+	if (range.left < 0 || range.top < 0 || range.right >= boardWidth || range.bottom >= boardHeight)
+		return 0;
+
+	int sum = 0;
+	for (int i = range.top; i <= range.bottom; i++) {
+		for (int j = range.left; j <= range.right; j++) {
+			sum += arr[i][j];
+		}
+	}
+	return sum;
+}
+
+void GameMain::calcScore(DragRect range) {
+	if (range.left < 0 || range.top < 0 || range.right >= boardWidth || range.bottom >= boardHeight)
+		return ;
+
+	for (int i = range.top; i <= range.bottom; i++) {
+		for (int j = range.left; j <= range.right; j++) {
+			if (arr[i][j] == 0) continue;
+			score++;
+			arr[i][j] = 0;
+		}
+	}
+	scoreText.setString(L"점수: " + std::to_string(score));
+}
+
+void GameMain::highlightRect(DragRect range) {
+	if (range.left < 0 || range.top < 0 || range.right >= boardWidth || range.bottom >= boardHeight)
+		return;
+
+	for (int i = range.top; i <= range.bottom; i++) {
+		for (int j = range.left; j <= range.right; j++) {
+			texts[i][j].setFillColor(Color(255, 150, 150));
+		}
+	}
 }
 
 bool GameMain::buttonCoolDown() {
 	static Clock clock;
 	if (clock.getElapsedTime().asSeconds() > 1) {
+		clock.restart();
+		return true;
+	}
+	return false;
+}
+
+bool GameMain::hackCoolDown() {
+	static Clock clock;
+	if (clock.getElapsedTime().asSeconds() > 0.8) {
 		clock.restart();
 		return true;
 	}
@@ -84,6 +109,33 @@ void GameMain::reset() {
 	}
 	scoreText.setString(L"점수: 0");
 	gameTimer.restart();
+	dragRectShape.setSize({ 0,0 });
+	delete hack_coro;
+	hack_coro = new Task(hack());
+}
+
+void GameMain::showFinalScene() {
+	Event event;
+	Text scoreText(L"점수: " + std::to_string(score), font, 120);
+	Text infoText(L"다시 시작하려면 R", font, 80);
+	scoreText.setPosition(530, 200);
+	infoText.setPosition(430, 500);
+	window->clear();
+	window->draw(scoreText);
+	window->draw(infoText);
+	window->display();
+	while (true)
+	{
+		while (window->pollEvent(event))
+		{
+			if (event.type == Event::Closed)
+				window->close();
+		}
+		if (Keyboard::isKeyPressed(Keyboard::R)) {
+			reset();
+			break;
+		}
+	}
 }
 
 void GameMain::runGame(){
@@ -96,9 +148,11 @@ void GameMain::runGame(){
 				window->close();
 		}
 
-		if (Keyboard::isKeyPressed(Keyboard::M) && buttonCoolDown()) {
-
+		if (Keyboard::isKeyPressed(Keyboard::M) && hackCoolDown()) {
+			if (!hack_coro->co_handler.done()) 
+				hack_coro->co_handler.resume();
 		}
+
 		if (Keyboard::isKeyPressed(Keyboard::R) && buttonCoolDown())
 			reset();
 
@@ -114,16 +168,7 @@ void GameMain::runGame(){
 			}
 			dragRectShape.setSize(Vector2f(curPos - dragStartPos));
 
-			DragRect dragRect = calcDragRect();
-
-			int sum = 0;
-			if (dragRect.left >= 0 && dragRect.top >= 0 && dragRect.right < boardWidth && dragRect.bottom < boardHeight) {
-				for (int i = dragRect.top; i <= dragRect.bottom; i++) {
-					for (int j = dragRect.left; j <= dragRect.right; j++) {
-						sum += arr[i][j];
-					}
-				}
-			}
+			int sum = calcRectSum(calcDragRect());
 
 			if (sum == 10) {
 				isCorrect = true;
@@ -137,17 +182,7 @@ void GameMain::runGame(){
 		else if (isDraging)
 		{
 			if (isCorrect) {
-				DragRect dragRect = calcDragRect();
-
-				if (dragRect.left >= 0 && dragRect.top >= 0 && dragRect.right < boardWidth && dragRect.bottom < boardHeight) {
-					for (int i = dragRect.top; i <= dragRect.bottom; i++) {
-						for (int j = dragRect.left; j <= dragRect.right; j++) {
-							arr[i][j] = 0;
-							score++;
-						}
-					}
-					scoreText.setString(L"점수: " + std::to_string(score));
-				}
+				calcScore(calcDragRect());
 			}
 			isDraging = false;
 			isCorrect = false;
@@ -170,4 +205,46 @@ void GameMain::runGame(){
 		window->draw(timeText);
 		window->display();
 	}
+}
+
+Task GameMain::hack() {
+	for (int x = 0; x < 3; x++)
+	{
+		for (int i = 0; i < boardHeight; ++i) {
+			for (int j = 0; j < boardWidth; j++) {
+				Task innerTask = isPossible(i, j);
+				while (true) {
+					innerTask.co_handler.resume();
+					if (innerTask.co_handler.done()) break;
+					co_await std::suspend_always{};
+				}
+			}
+		}
+	}
+}
+
+Task GameMain::isPossible(int r, int c) {
+	for (int i = r - boardHeight; i <= r + boardHeight; i++)
+	{
+		for (int j = c - boardWidth; j <= c + boardWidth; j++)
+		{
+			if (r == i && c == j) continue;
+			auto rect = makeDragRect(i, r, j, c);
+			int sum = calcRectSum(rect);
+			if (sum == 10) {
+				highlightRect(rect);
+				//calcScore(rect);
+				co_await std::suspend_always{};
+			}
+		}
+	}
+}
+
+DragRect GameMain::makeDragRect(int y1, int y2, int x1, int x2) {
+	return {
+		std::min(x1,x2),
+		std::min(y1,y2),
+		std::max(x1,x2),
+		std::max(y1,y2),
+	};
 }

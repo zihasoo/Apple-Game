@@ -3,11 +3,10 @@
 #include <vector>
 #include <random>
 
+#include "models.h"
+
 using namespace sf;
 
-struct DragRect {
-	int left, top, right, bottom;
-};
 
 class GameMain {
 	RenderWindow* window;
@@ -28,6 +27,8 @@ class GameMain {
 	std::mt19937* gen;
 	std::uniform_int_distribution<int>* uni;
 
+	Task* hack_coro;
+
 	bool isDraging = false;
 	bool isCorrect = false;
 	Vector2i dragStartPos;
@@ -36,8 +37,17 @@ class GameMain {
 
 	DragRect calcDragRect();
 	bool buttonCoolDown();
+	bool hackCoolDown();
 	void showFinalScene();
 	void reset();
+
+	int calcRectSum(DragRect range);
+	void calcScore(DragRect range);
+	void highlightRect(DragRect range);
+
+	Task hack();
+	Task isPossible(int r, int c);
+	DragRect makeDragRect(int y1, int y2, int x1, int x2);
 	
 public:
 	GameMain();
