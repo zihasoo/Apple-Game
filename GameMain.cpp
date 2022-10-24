@@ -1,9 +1,10 @@
 #include <iostream>
 #include <format>
+#include <thread>
 #include "GameMain.h"
 
 GameMain::GameMain() {
-	window = new RenderWindow(VideoMode(1440, 800), "Apple-Game!");
+	window = new RenderWindow(VideoMode(1440, 800), "Apple-Game!", Style::Titlebar | Style::Close);
 	gen = new std::mt19937(time(0));
 	uni = new std::uniform_int_distribution<int>(1, 9);
 	hack_coro = new Task(hack());
@@ -12,9 +13,8 @@ GameMain::GameMain() {
 	texts.assign(boardHeight, std::vector<Text>(boardWidth,Text("0",font,40)));
 
 	std::cout << "R: 게임 재시작\n";
-	std::cout << "M: 메크로 작동\n";
 	window->setFramerateLimit(144);
-	font.loadFromFile("fonts/Pretendard-Regular.ttf");
+	font.loadFromFile("Pretendard-Regular.ttf");
 	timeText.setFont(font);
 	scoreText.setFont(font);
 	timeText.setPosition(680, 0);
@@ -147,7 +147,6 @@ void GameMain::runGame(){
 			if (event.type == Event::Closed)
 				window->close();
 		}
-
 		if (Keyboard::isKeyPressed(Keyboard::Tilde) && hackCoolDown()) {
 			if (!hack_coro->co_handler.done()) 
 				hack_coro->co_handler.resume();
