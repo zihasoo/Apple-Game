@@ -148,7 +148,7 @@ void GameMain::runGame(){
 				window->close();
 		}
 
-		if (Keyboard::isKeyPressed(Keyboard::M) && hackCoolDown()) {
+		if (Keyboard::isKeyPressed(Keyboard::Tilde) && hackCoolDown()) {
 			if (!hack_coro->co_handler.done()) 
 				hack_coro->co_handler.resume();
 		}
@@ -232,8 +232,8 @@ Task GameMain::isPossible(int r, int c) {
 			auto rect = makeDragRect(i, r, j, c);
 			int sum = calcRectSum(rect);
 			if (sum == 10) {
-				highlightRect(rect);
-				//calcScore(rect);
+				//highlightRect(rect);
+				calcScore(rect);
 				co_await std::suspend_always{};
 			}
 		}
